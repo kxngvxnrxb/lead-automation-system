@@ -1,0 +1,24 @@
+[
+  {
+    "execution": {
+      "id": "3106",
+      "url": "https://n8n.kingvenreb.dev/workflow/qZCxMc6AGSA3dmku/executions/3106",
+      "error": {
+        "level": "warning",
+        "description": "Failed query: INSERT INTO public.lead_events (lead_id, lead_key, event_type, run_id, meta) VALUES ($1, $2, $3, $4, $5)",
+        "message": "there is no parameter $5",
+        "name": "NodeOperationError",
+        "node": {
+          "name": "Upsert Lead Success",
+          "type": "n8n-nodes-base.postgres"
+        }
+      },
+      "lastNodeExecuted": "Upsert Lead Success",
+      "mode": "webhook"
+    },
+    "workflow": {
+      "id": "qZCxMc6AGSA3dmku",
+      "name": "Lead Intake Service / Lead Scoring Engine"
+    }
+  }
+]
