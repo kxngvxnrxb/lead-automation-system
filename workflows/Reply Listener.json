@@ -1,0 +1,764 @@
+{
+  "name": "Reply Listener",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        352,
+        -64
+      ],
+      "id": "3bd898fd-7113-43de-85db-98188db9b0e8",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM public.leads\nWHERE thread_id = $1",
+        "options": {
+          "queryReplacement": "={{ $json.threadId }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        544,
+        -64
+      ],
+      "id": "46f287b3-e961-4a3f-8f57-8539cd12124d",
+      "name": "Get current threads",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.leads\nset status = 'replied',\nlast_reply_at = NOW()\nwhere id = $1",
+        "options": {
+          "queryReplacement": "={{ $json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        992,
+        -80
+      ],
+      "id": "304ad27b-2412-420c-8d17-ce66f28fad3c",
+      "name": "Update status to replied",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  INSERT INTO public.lead_events (\n    lead_id, lead_key, event_type, run_id, meta\n  ) VALUES (\n    $1, $2, $3, $4, $5\n  )",
+        "options": {
+          "queryReplacement": "={{ $('Get current threads').item.json.id }},\n{{ $('Get current threads').item.json.lead_key }},\n{{ 'lead_replied' }},\n{{ $execution.id }},\n{{ JSON.stringify(\n  { thread_id: $json.thread_id, \n    from: $('Gmail Trigger').item.json.From,\n    subject: $('Gmail Trigger').item.json.Subject,\n    timestamp: $now\n  }) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        -80
+      ],
+      "id": "19aa0758-d872-4bc2-ba79-5b49ecd0869f",
+      "name": "Insert replied event",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a B2B Lead Qualification Analyst. Your task is to analyze inbound email replies and determine both the lead’s intent and appropriate classification.\n\nEmail Snippet:\n{{ $('Gmail Trigger').item.json.snippet }}\n\nClassification Options:\n1. Interested – Lead shows clear interest in discussing or proceeding (e.g., wants to book a call, shows positive intent).\n2. Question – Lead asks for more information or clarification.\n3. Not Interested – Lead declines or is not interested.\n4. Unsubscribe – Lead requests to stop receiving messages.\n5. Out of Office – Automated reply indicating absence.\n\nIntent Signals (detect if present):\n- wants_to_schedule_call (e.g., “when can we talk”, “available next week”)\n- asking_question (e.g., pricing, process, details)\n- soft_interest (e.g., “sounds interesting”, but no clear next step)\n- rejection (e.g., “not interested”, “no thanks”)\n- unsubscribe_request (e.g., “remove me”, “stop emailing”)\n- out_of_office (auto replies, away messages)\n\nInstructions:\n- Carefully analyze the email snippet.\n- Assign exactly ONE classification.\n- Detect the most relevant intent signal.\n- Provide a short rationale (max 1 sentence).\n\nOutput format (JSON only):\n{\n  \"classification\": \"Interested/Question/Not Interested/Unsubscribe/Out of Office\",\n  \"intent\": \"wants_to_schedule_call/asking_question/soft_interest/rejection/unsubscribe_request/out_of_office\",\n  \"reason\": \"Concise explanation\"\n}\n\nReturn only JSON. No extra text, no formatting, no symbols.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        400,
+        192
+      ],
+      "id": "409fa35f-8eaa-4f2f-975b-5be71880b2e6",
+      "name": "AI Agent3"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        352,
+        400
+      ],
+      "id": "95a98e27-14e6-4287-9eb7-d327a5b93951",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GzZB1QFK5O0xyivB",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('AI Agent3').item.json.output.classification }}",
+                    "rightValue": "Interested",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "fba1a73f-14a3-4625-be65-a704afbcde39"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Interested"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4074de0d-16a5-4d6f-a2ba-269814ced5ad",
+                    "leftValue": "={{ $('AI Agent3').item.json.output.classification }}",
+                    "rightValue": "Question",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Question"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "80cc830e-1f5f-4a40-97c9-675404daa708",
+                    "leftValue": "={{ $('AI Agent3').item.json.output.classification }}",
+                    "rightValue": "Not Interested",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Not Interested"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "e5b487c0-2ed7-4de5-bfc4-3b42f05b1f1f",
+                    "leftValue": "={{ $('AI Agent3').item.json.output.classification }}",
+                    "rightValue": "Unsubscribe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Unsubscribe"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "5b5bfc20-c6eb-4dcb-85a5-a153ff7f5672",
+                    "leftValue": "={{ $('AI Agent3').item.json.output.classification }}",
+                    "rightValue": "Out of Office",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Out of Office"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1200,
+        144
+      ],
+      "id": "87b8efa2-2c92-4fdf-8c85-f5edcbb3e975",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n\t\"classification\": \"\",\n    \"intent\": \"\",\n\t\"reason\": \"\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        576,
+        400
+      ],
+      "id": "5744628b-b32c-49e2-a870-adfe3ad75fa6",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "483f40c5-c8ce-4203-a34b-7d55e9310654",
+              "name": "sender_name",
+              "value": "King Venreb Narag",
+              "type": "string"
+            },
+            {
+              "id": "2799082a-ddff-408c-b8e5-6e5fd9c7351d",
+              "name": "sender_role",
+              "value": "Automation & AI Systems",
+              "type": "string"
+            },
+            {
+              "id": "cedd3cd9-f8c7-415b-b1be-e05a3eae2ca3",
+              "name": "company_website",
+              "value": "https://www.kingvenreb.dev",
+              "type": "string"
+            },
+            {
+              "id": "737732be-b9d0-4dc6-a1cd-6285a554a1d5",
+              "name": "message_id",
+              "value": "={{ $json.messages[$json.messages.length - 1].id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        992,
+        192
+      ],
+      "id": "47ecc879-8df3-4bab-ba81-35f82cd67965",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "get",
+        "threadId": "={{ $('Get current threads').item.json.thread_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        192
+      ],
+      "id": "74116c03-5b8f-4f34-8af6-3a4f40f82aba",
+      "name": "Get a thread",
+      "webhookId": "1524d067-a9c7-4f8a-9899-331ca4f293c5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get current threads').item.json.thread_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "message": "=Hi {{ $('Get current threads').item.json.first_name }},\n\nThank you for your candid response regarding our {{ $('Get current threads').item.json.service }} offerings. I understand that this may not be the right time or fit for your current needs.\n\nWe appreciate your time and consideration, and we’d be happy to stay in touch should your requirements evolve in the future. If you’d like, I can also share occasional updates about our services that might be relevant to your business.\n\nThank you again for your time, and I wish you continued success with your initiatives at {{ $('Get current threads').item.json.company }}.\n\nBest regards,\n{{ $('Edit Fields').item.json.sender_name }}\n{{ $('Edit Fields').item.json.sender_role }}\n{{ $('Edit Fields').item.json.company_website }}",
+        "options": {
+          "replyToRecipientsOnly": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        288
+      ],
+      "id": "60c10d44-9530-41fc-8b59-c712af5816e9",
+      "name": "Not Interested email message",
+      "webhookId": "a1669ced-b3ce-450e-b83a-b9d917ed1077",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get current threads').item.json.thread_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "message": "=Hi {{ $('Get current threads').item.json.first_name }},\n\nI have received your request to unsubscribe from our communications and have ensured that you will no longer receive emails from us.\n\nI completely respect your preferences, and I apologize for any inconvenience caused. Your email address has been removed from our mailing list.\n\nThank you for your past engagement, and I wish you and your team at {{ $('Get current threads').item.json.company }} all the best in your future endeavors.\n\nSincerely,\n{{ $('Edit Fields').item.json.sender_name }}\n{{ $('Edit Fields').item.json.sender_role }}\n{{ $('Edit Fields').item.json.company_website }}",
+        "options": {
+          "replyToRecipientsOnly": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        464
+      ],
+      "id": "01609b4b-6909-4d70-ba65-c4ebcc35ac62",
+      "name": "Unsubscribe email message",
+      "webhookId": "a1669ced-b3ce-450e-b83a-b9d917ed1077",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get current threads').item.json.thread_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "message": "=Hi {{ $('Get current threads').item.json.first_name }},\n\nThank you for your automated reply. I understand that you are currently out of the office. I will follow up at a later time when you are available.\n\nIn the meantime, if there is someone else I should reach out to regarding {{ $('Get current threads').item.json.service }}, please let me know. Otherwise, I’ll reconnect once you’re back.\n\nLooking forward to speaking with you when it’s convenient.\n\nBest regards,\n{{ $('Edit Fields').item.json.sender_name }}\n{{ $('Edit Fields').item.json.sender_role }}\n{{ $('Edit Fields').item.json.company_website }}",
+        "options": {
+          "replyToRecipientsOnly": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        640
+      ],
+      "id": "b28566f8-efcf-483f-9ece-13e02dc254ff",
+      "name": "Out of Office email message",
+      "webhookId": "a1669ced-b3ce-450e-b83a-b9d917ed1077",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "98162208-6a21-46d6-87ed-89d1720bac14",
+              "leftValue": "={{ $('AI Agent3').item.json.output.intent }}",
+              "rightValue": "wants_to_schedule_call",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1520,
+        -32
+      ],
+      "id": "4cfbe16d-b692-4a9e-bb97-9a68f395e762",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get current threads').item.json.thread_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "message": "=Hi {{ $('Get current threads').item.json.first_name }},\n\nGreat to hear from you — happy to connect.\n\nYou can grab a time that works best for you here:\nhttps://calendly.com/kingvenrebquirantenarag/15-minute-meeting\n\nIf none of the slots work, feel free to suggest a time on your end.\n\nLooking forward to speaking with you.\n\nBest regards,\n{{ $('Edit Fields').item.json.sender_name }}\n{{ $('Edit Fields').item.json.sender_role }}\n{{ $('Edit Fields').item.json.company_website }}",
+        "options": {
+          "replyToRecipientsOnly": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        -144
+      ],
+      "id": "d5fcd9d7-c81a-4848-a25d-9a29d0ddca2d",
+      "name": "SHORT Calendly Email (High conversion)",
+      "webhookId": "a1669ced-b3ce-450e-b83a-b9d917ed1077",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get current threads').item.json.thread_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "message": "=Hi {{ $('Get current threads').item.json.first_name }},\n\nThanks for your response — glad to hear this caught your interest.\n\nBased on what you shared, I believe there’s a strong opportunity to use AI to improve efficiency and streamline key parts of your workflow. I’d be happy to walk you through some ideas tailored to your situation.\n\nIf you’re open to it, you can book a quick 15-minute call here:\nhttps://calendly.com/kingvenrebquirantenarag/15-minute-meeting\n\nAlternatively, feel free to share a bit more about your goals and I can provide more specific recommendations.\n\nBest regards,\n{{ $('Edit Fields').item.json.sender_name }}\n{{ $('Edit Fields').item.json.sender_role }}\n{{ $('Edit Fields').item.json.company_website }}",
+        "options": {
+          "replyToRecipientsOnly": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        48
+      ],
+      "id": "b467fbe4-1e05-4675-8034-70c5d169b683",
+      "name": "GUIDED Conversion Email",
+      "webhookId": "a1669ced-b3ce-450e-b83a-b9d917ed1077",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get current threads').item.json.thread_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "message": "=Hi {{ $('Get current threads').item.json.first_name }},\n\nThanks for your question — happy to help.\n\nThe specifics can vary depending on your current setup, goals, and the level of AI integration you're looking for. In most cases, we tailor the solution to ensure it aligns with your workflows and delivers measurable improvements.\n\nI’d be glad to walk you through how this could work for your situation and answer your questions in detail. You can book a quick call here:\nhttps://calendly.com/kingvenrebquirantenarag/15-minute-meeting\n\nLooking forward to connecting.\n\nBest regards,\n{{ $('Edit Fields').item.json.sender_name }}\n{{ $('Edit Fields').item.json.sender_role }}\n{{ $('Edit Fields').item.json.company_website }}",
+        "options": {
+          "replyToRecipientsOnly": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        112
+      ],
+      "id": "66def0dc-da4a-40b5-8d30-0a6d3af6a823",
+      "name": "Answer + CTA",
+      "webhookId": "a1669ced-b3ce-450e-b83a-b9d917ed1077",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "51cb73ae-0784-4cb0-83ea-cda3afbffb81",
+              "leftValue": "={{ $items().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        736,
+        -64
+      ],
+      "id": "adac4990-6b52-4126-896d-e40eb92ff3c8",
+      "name": "If1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get current threads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get current threads": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update status to replied": {
+      "main": [
+        [
+          {
+            "node": "Insert replied event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert replied event": {
+      "main": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent3": {
+      "main": [
+        [
+          {
+            "node": "Get a thread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer + CTA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Interested email message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsubscribe email message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Out of Office email message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a thread": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "SHORT Calendly Email (High conversion)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GUIDED Conversion Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Update status to replied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "HgfbrTcV1vTYGfg6",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "6a04f8e5-8611-4091-bd97-58b53d507b57",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75a203da2afa4f9088428b5121cafd52867cf04f552dbee25573576faa37906a"
+  },
+  "id": "gp3GLBAuChyxGAnx",
+  "tags": []
+}

@@ -1,0 +1,185 @@
+{
+  "name": "Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "56f3c642-c54a-43a7-bc36-d3834989d4ce",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.error_logs (\n  workflow_name, node_name, error_message, meta, run_id\n) VALUES (\n  $1, $2, $3, $4, $5\n)",
+        "options": {
+          "queryReplacement": "={{ $json.workflow.name }},{{ $json.execution.error.node.name }},{{ $json.execution.error.message }},{{ JSON.stringify({\n  url: $json.execution.url,\n  description: $json.execution.error.description,\n  timestamp: $json.execution.error.timestamp.toDateTime('ms'),\n}) }},{{ $json.execution.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "47606f68-665a-4cb0-9cc2-4683e94096db",
+      "name": "Insert Error Log",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8593099355",
+        "text": "=🚨 n8n Error Alert\n\nWorkflow: {{ $('Error Trigger').item.json.workflow.name }}\nNode: {{ $('Error Trigger').item.json.execution.error.node.name }}\nError: {{ $('Error Trigger').item.json.execution.error.message }}\n\nDescription:\n<pre>{{ $('Error Trigger').item.json.execution.error.description }}</pre>\n\nExecution ID: {{ $('Error Trigger').item.json.execution.id }}\nMode: {{ $('Error Trigger').item.json.execution.mode }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "View Execution",
+                    "additionalFields": {
+                      "url": "={{ $('Error Trigger').item.json.execution.url }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "83667f95-3de1-4367-863b-47adf98c1fd8",
+      "name": "Send a text message",
+      "webhookId": "51059ca7-9849-465a-be6a-ea3186798611",
+      "credentials": {
+        "telegramApi": {
+          "id": "ls8zaEBLqU2UEoOp",
+          "name": "Error Log API"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Error Trigger": [
+      {
+        "json": {
+          "execution": {
+            "id": "3106",
+            "url": "https://n8n.kingvenreb.dev/workflow/qZCxMc6AGSA3dmku/executions/3106",
+            "error": {
+              "level": "warning",
+              "tags": {},
+              "description": "Failed query:   INSERT INTO public.lead_events (\n    lead_id, lead_key, event_type, run_id, meta\n  ) VALUES (\n    $1, $2, $3, $4, $5\n  )",
+              "timestamp": 1773893016235,
+              "context": {},
+              "functionality": "regular",
+              "name": "NodeOperationError",
+              "node": {
+                "parameters": {
+                  "resource": "database",
+                  "operation": "executeQuery",
+                  "query": "  INSERT INTO public.lead_events (\n    lead_id, lead_key, event_type, run_id, meta\n  ) VALUES (\n    $1, $2, $3, $4, $5\n  )",
+                  "options": {
+                    "queryReplacement": "={{ $json.id_key }},{{ $json.lead_key }},{{ $json.inserted ? \"intake_received\" : \"intake_updated\" }},{{ $execution.id }},{{ JSON.stringify({ \n  send_mode: $('If valid?').item.json.execution_mode, \n  typeform_token: $('If valid?').item.json.typeform_token,\n  utm_source: $('If valid?').item.json.utm_source,\n  utm_medium: $('If valid?').item.json.utm_medium,\n  utm_campaign: $('If valid?').item.json.utm_campaign,\n}) }}"
+                  }
+                },
+                "type": "n8n-nodes-base.postgres",
+                "typeVersion": 2.6,
+                "position": [
+                  144,
+                  0
+                ],
+                "id": "eb360225-08aa-4603-8ae0-a07363c8928a",
+                "name": "Upsert Lead Success",
+                "alwaysOutputData": false,
+                "credentials": {
+                  "postgres": {
+                    "id": "2EcOd9OpTXp8Z4p5",
+                    "name": "Postgres account"
+                  }
+                }
+              },
+              "messages": [],
+              "message": "there is no parameter $5",
+              "stack": "NodeOperationError: there is no parameter $5\n    at parsePostgresError (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-nodes-base@file+packages+nodes-base_@aws-sdk+credential-providers@3.808.0_asn1.js@5_8da18263ca0574b0db58d4fefd8173ce/node_modules/n8n-nodes-base/nodes/Postgres/v2/helpers/utils.ts:123:9)\n    at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-nodes-base@file+packages+nodes-base_@aws-sdk+credential-providers@3.808.0_asn1.js@5_8da18263ca0574b0db58d4fefd8173ce/node_modules/n8n-nodes-base/nodes/Postgres/v2/helpers/utils.ts:278:19\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at ExecuteContext.execute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-nodes-base@file+packages+nodes-base_@aws-sdk+credential-providers@3.808.0_asn1.js@5_8da18263ca0574b0db58d4fefd8173ce/node_modules/n8n-nodes-base/nodes/Postgres/v2/actions/database/executeQuery.operation.ts:149:9)\n    at ExecuteContext.router (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-nodes-base@file+packages+nodes-base_@aws-sdk+credential-providers@3.808.0_asn1.js@5_8da18263ca0574b0db58d4fefd8173ce/node_modules/n8n-nodes-base/nodes/Postgres/v2/actions/router.ts:41:17)\n    at ExecuteContext.execute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-nodes-base@file+packages+nodes-base_@aws-sdk+credential-providers@3.808.0_asn1.js@5_8da18263ca0574b0db58d4fefd8173ce/node_modules/n8n-nodes-base/nodes/Postgres/v2/PostgresV2.node.ts:26:10)\n    at WorkflowExecute.executeNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+exporter-trace-otlp_4dbefa9881a7c57a9e05a20ce4387c10/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1039:8)\n    at WorkflowExecute.runNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+exporter-trace-otlp_4dbefa9881a7c57a9e05a20ce4387c10/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1218:11)\n    at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+exporter-trace-otlp_4dbefa9881a7c57a9e05a20ce4387c10/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1653:27\n    at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+exporter-trace-otlp_4dbefa9881a7c57a9e05a20ce4387c10/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2296:11"
+            },
+            "lastNodeExecuted": "Upsert Lead Success",
+            "mode": "webhook",
+            "executionContext": {
+              "version": 1,
+              "establishedAt": 1773893015229,
+              "source": "webhook",
+              "triggerNode": {
+                "name": "Webhook",
+                "type": "n8n-nodes-base.webhook"
+              }
+            }
+          },
+          "workflow": {
+            "id": "qZCxMc6AGSA3dmku",
+            "name": "Lead Intake Service / Lead Scoring Engine"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Insert Error Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Error Log": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "8f64edb5-0a19-415e-be0a-97c61f423c34",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75a203da2afa4f9088428b5121cafd52867cf04f552dbee25573576faa37906a"
+  },
+  "id": "HgfbrTcV1vTYGfg6",
+  "tags": []
+}

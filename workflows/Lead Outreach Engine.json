@@ -1,0 +1,269 @@
+{
+  "name": "Lead Outreach Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a B2B outreach assistant.\n\nWrite a short personalized outreach email to a potential client.\n\nLead information:\n\nName: {{ $json.name }}\nCompany: {{ $json.company }}\nIndustry: {{ $json.industry }}\nWebsite: {{ $json.website }}\nInterested Service: {{ $json.service }}\nBudget: {{ $json.budget_usd }}\nProject Description: {{ $json.description }}\n\nInstructions:\n\n• Keep the email under 120 words\n• Sound professional but friendly\n• Mention how automation or AI could help their business\n• End with a call to schedule a quick call\n• Do NOT sound like spam\n• Do NOT include a signature\n• Do NOT include a sender name\n\nI want it also to return in this JSON shape:\n\n{\n  \"subject\": \"\",\n  \"body\": \"\"\n}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        64,
+        -144
+      ],
+      "id": "0af43aee-aef8-44f7-baf1-42be07c3b6ad",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"subject\": \"\",\n  \"body\": \"\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        48
+      ],
+      "id": "60aec196-07ca-48a0-a48b-25c347eaa066",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('When Executed by Another Workflow').item.json.email }}",
+        "subject": "={{ $json.output.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.output.body }}\n\nBest Regards,\n{{ $json.sender_name }}\n{{ $json.sender_role }}\n{{ $json.company_website }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        -144
+      ],
+      "id": "4f11fa57-ce54-4104-9922-7e9a4febc2a5",
+      "name": "Send a message",
+      "webhookId": "018e309f-8926-4d7c-93aa-b56d3995942c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "b2ntJtprvRS48xqc",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "32ee6b3e-0979-4787-af07-2becf39346d2",
+              "name": "sender_name",
+              "value": "King Venreb Narag",
+              "type": "string"
+            },
+            {
+              "id": "bcaee577-11ad-40e6-9fb9-875d6da8c4de",
+              "name": "sender_role",
+              "value": "Automation & AI Systems",
+              "type": "string"
+            },
+            {
+              "id": "f219f5b9-857e-49e1-9c14-15ceeb822105",
+              "name": "company_website",
+              "value": "https://www.kingvenreb.dev",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        384,
+        -144
+      ],
+      "id": "625a214b-4778-4a77-95d3-0802debac7b9",
+      "name": "Set signature"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  INSERT INTO public.lead_events (\n    lead_id, lead_key, event_type, run_id, meta\n  ) VALUES (\n    $1, $2, $3, $4, $5\n  )",
+        "options": {
+          "queryReplacement": "={{ $json.id }},\n{{ $json.lead_key }},\n{{ 'email_sent' }},\n{{ $execution.id }},\n{{ JSON.stringify(\n  { score: $json.score, \n    score_reasons: $score_reasons, \n     lead_summary: {\n    name: `${$json.first_name} ${$json.last_name}`.trim(),\n    company: $json.company,\n    email: $json.email,\n    website: $json.website,\n    domain: $json.domain,\n    service: $json.service,\n    budget_usd: $json.budget_usd,\n    budget_bucket: $json.budget_bucket\n  }\n}) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        976,
+        -144
+      ],
+      "id": "06694dfb-e830-4a27-abd5-65e76d736252",
+      "name": "Insert email sent event",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE PUBLIC.leads\nSET thread_id = $1,\nstatus = 'emailed',\nlast_email_sent_at = NOW(),\nfollowup_count = 0\nWHERE id = $2\nRETURNING *",
+        "options": {
+          "queryReplacement": "={{ $json.threadId }},{{ $('When Executed by Another Workflow').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        768,
+        -144
+      ],
+      "id": "1c77ab77-e812-462d-b8a9-5bff9c4919ad",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        64,
+        48
+      ],
+      "id": "c7d24165-9e9a-4670-86c3-3a56ed35c3b2",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GzZB1QFK5O0xyivB",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -176,
+        -144
+      ],
+      "id": "2229621a-174b-410c-a1b4-853d39aadf1b",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Set signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set signature": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Insert email sent event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "HgfbrTcV1vTYGfg6",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "554fbb1e-d0df-4199-a2eb-689099f3266c",
+  "meta": {
+    "instanceId": "75a203da2afa4f9088428b5121cafd52867cf04f552dbee25573576faa37906a"
+  },
+  "id": "hLQkC9QQK3TaJFni",
+  "tags": []
+}

@@ -1,0 +1,609 @@
+{
+  "name": "Approval Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('If approve?').item.json.callback_id }}",
+        "additionalFields": {
+          "text": "Approved ✅"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        -64
+      ],
+      "id": "74dba9f2-9056-44d5-9adc-cd4280532c74",
+      "name": "Answer Query a callback",
+      "webhookId": "58e4fc6e-b239-4e71-9f11-140c8fb3e1b1",
+      "credentials": {
+        "telegramApi": {
+          "id": "TXtMb4cJ54GmfJU8",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('If approve?').item.json.chat_id }}",
+        "messageId": "={{ $('Telegram Trigger (Callback)').item.json.callback_query.message.message_id }}",
+        "text": "={{ $('Telegram Trigger (Callback)').item.json.callback_query.message.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -64
+      ],
+      "id": "6ac37952-7176-4cfa-b6e1-8ab78919b1d7",
+      "name": "Edit a text message",
+      "webhookId": "9ff4ecda-97b3-4f89-9901-2734085319bd",
+      "credentials": {
+        "telegramApi": {
+          "id": "TXtMb4cJ54GmfJU8",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -768,
+        32
+      ],
+      "id": "0000cfc4-1fb2-450a-846a-174e46267312",
+      "name": "Telegram Trigger (Callback)",
+      "webhookId": "822aa81d-8617-40da-a620-8e0d0746a24b",
+      "credentials": {
+        "telegramApi": {
+          "id": "TXtMb4cJ54GmfJU8",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7db3b2be-1cfe-40eb-8d83-228c7a89788d",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -352,
+        32
+      ],
+      "id": "50ac86ad-ccfe-4da4-b843-32b8a9543d9e",
+      "name": "If approve?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cb1c0577-f754-4d8e-9511-de21e0b7033b",
+              "name": "action",
+              "value": "={{ $json.callback_query.data.split('_')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "237b9a66-c45b-4c04-9f39-29ed13097384",
+              "name": "lead_id",
+              "value": "={{ $json.callback_query.data.split('_')[1] }}",
+              "type": "string"
+            },
+            {
+              "id": "10f9c3e8-6bc4-4dcc-a5ca-2912dd51c9d0",
+              "name": "callback_id",
+              "value": "={{ $json.callback_query.id }}",
+              "type": "string"
+            },
+            {
+              "id": "57d2b5fe-d458-4b7f-aeec-a5c5ab074d33",
+              "name": "chat_id",
+              "value": "={{ $json.callback_query.message.chat.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -560,
+        32
+      ],
+      "id": "1087d0a1-c136-4ba5-9d63-a07c4f8ec472",
+      "name": "Extract + Normalize"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.leads\nset status = 'approved'\nwhere id = $1\nreturning *;",
+        "options": {
+          "queryReplacement": "={{ $json.lead_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -128,
+        -64
+      ],
+      "id": "5ac2301a-8ee4-48b1-8e88-91a9eef2a971",
+      "name": "Update approve status",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  INSERT INTO public.lead_events (\n    lead_id, lead_key, event_type, run_id, meta\n  ) VALUES (\n    $1, $2, $3, $4, $5\n  )",
+        "options": {
+          "queryReplacement": "={{ $json.id }}, {{ $json.lead_key }}, {{ 'lead_approved' }}, {{ $execution.id }}, {{ JSON.stringify({ approval_channel: 'telegram', approved_by: 'manual', action: 'approve', approved_at: new Date().toISOString()}) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        80,
+        -64
+      ],
+      "id": "88cd6b00-0388-4d2e-8b8b-1d411d97bcd1",
+      "name": "Insert approve event",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.leads\nset status = 'rejected'\nwhere id = $1\nreturning *;",
+        "options": {
+          "queryReplacement": "={{ $json.lead_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -128,
+        128
+      ],
+      "id": "e412a160-f1b9-4260-a162-41cb4f3ded62",
+      "name": "Update status to rejected",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  INSERT INTO public.lead_events (\n    lead_id, lead_key, event_type, run_id, meta\n  ) VALUES (\n    $1, $2, $3, $4, $5\n  )",
+        "options": {
+          "queryReplacement": "={{ $json.id }}, {{ $json.lead_key }}, {{ 'lead_approved' }}, {{ $execution.id }}, {{ JSON.stringify({ approval_channel: 'telegram', approved_by: 'manual', action: 'reject', approved_at: new Date().toISOString()}) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        80,
+        128
+      ],
+      "id": "1bed68a5-351c-4d6f-9cd5-44b69669c3d6",
+      "name": "Insert reject event",
+      "credentials": {
+        "postgres": {
+          "id": "2EcOd9OpTXp8Z4p5",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('If approve?').item.json.callback_id }}",
+        "additionalFields": {
+          "text": "Rejected ❌"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        128
+      ],
+      "id": "801b41e5-6f88-43f2-be1e-e7cfcbf45b62",
+      "name": "Answer Query a callback reject",
+      "webhookId": "58e4fc6e-b239-4e71-9f11-140c8fb3e1b1",
+      "credentials": {
+        "telegramApi": {
+          "id": "TXtMb4cJ54GmfJU8",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger (Callback)').item.json.callback_query.from.id }}",
+        "text": "Lead rejected ❌",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        496,
+        128
+      ],
+      "id": "6e7aa0aa-a5f5-4d54-b373-8562ad0591d0",
+      "name": "Send a reject message",
+      "webhookId": "9a24a7fd-d92c-42d2-bf5e-cef4c0e0a14d",
+      "credentials": {
+        "telegramApi": {
+          "id": "TXtMb4cJ54GmfJU8",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger (Callback)').item.json.callback_query.from.id }}",
+        "text": "Lead has been approved ✅",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        496,
+        -64
+      ],
+      "id": "e8ba9bab-f942-4aac-ac1d-6eef85f3707a",
+      "name": "Send an approve message",
+      "webhookId": "9a24a7fd-d92c-42d2-bf5e-cef4c0e0a14d",
+      "credentials": {
+        "telegramApi": {
+          "id": "TXtMb4cJ54GmfJU8",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('If approve?').item.json.chat_id }}",
+        "messageId": "={{ $('Telegram Trigger (Callback)').item.json.callback_query.message.message_id }}",
+        "text": "={{ $('Telegram Trigger (Callback)').item.json.callback_query.message.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        128
+      ],
+      "id": "fcaa64f0-1073-4bc3-ad5b-ec4c23339bd4",
+      "name": "Edit a text message1",
+      "webhookId": "9ff4ecda-97b3-4f89-9901-2734085319bd",
+      "credentials": {
+        "telegramApi": {
+          "id": "TXtMb4cJ54GmfJU8",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "hLQkC9QQK3TaJFni",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/hLQkC9QQK3TaJFni",
+          "cachedResultName": "Lead Outreach Engine"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        -64
+      ],
+      "id": "be23f704-0c0c-466f-856b-c605ea22afcb",
+      "name": "Call 'Lead Outreach Engine'"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2db8210e-253b-4cdb-8619-22596457e394",
+              "name": "name",
+              "value": "={{ $('Update approve status').item.json.first_name }} {{ $('Update approve status').item.json.last_name }}",
+              "type": "string"
+            },
+            {
+              "id": "fdce1d28-cebb-4e39-9eb6-6b58da6390d9",
+              "name": "company",
+              "value": "={{ $('Update approve status').item.json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "c3ae97d9-3b42-457d-8703-fd25fce758ce",
+              "name": "industry",
+              "value": "={{ $('Update approve status').item.json.industry }}",
+              "type": "string"
+            },
+            {
+              "id": "7334860a-f49a-42a9-921e-b923eace3c08",
+              "name": "website",
+              "value": "={{ $('Update approve status').item.json.website }}",
+              "type": "string"
+            },
+            {
+              "id": "a80776b3-ba0d-4f3a-9aff-e4b73fe1695b",
+              "name": "service",
+              "value": "={{ $('Update approve status').item.json.service }}",
+              "type": "string"
+            },
+            {
+              "id": "6c08eeef-2125-4182-9bba-fd7d79e9b77d",
+              "name": "budget_usd",
+              "value": "={{ $('Update approve status').item.json.budget_usd }}",
+              "type": "number"
+            },
+            {
+              "id": "ebd2d0f3-165c-4dfa-a94b-8d1dc7b9e50e",
+              "name": "description",
+              "value": "={{ $('Update approve status').item.json.description }}",
+              "type": "string"
+            },
+            {
+              "id": "136bcd08-903e-48a3-ad30-fb7c17624e65",
+              "name": "email",
+              "value": "={{ $('Update approve status').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "62a64a3c-fc52-422b-9acd-2efa5f674417",
+              "name": "id",
+              "value": "={{ $('Update approve status').item.json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        928,
+        -64
+      ],
+      "id": "ca2777e8-a271-40f6-86b3-b9270345a05f",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Answer Query a callback": {
+      "main": [
+        [
+          {
+            "node": "Send an approve message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger (Callback)": {
+      "main": [
+        [
+          {
+            "node": "Extract + Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If approve?": {
+      "main": [
+        [
+          {
+            "node": "Update approve status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update status to rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract + Normalize": {
+      "main": [
+        [
+          {
+            "node": "If approve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update approve status": {
+      "main": [
+        [
+          {
+            "node": "Insert approve event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert approve event": {
+      "main": [
+        [
+          {
+            "node": "Answer Query a callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update status to rejected": {
+      "main": [
+        [
+          {
+            "node": "Insert reject event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert reject event": {
+      "main": [
+        [
+          {
+            "node": "Answer Query a callback reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Query a callback reject": {
+      "main": [
+        [
+          {
+            "node": "Send a reject message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a reject message": {
+      "main": [
+        [
+          {
+            "node": "Edit a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an approve message": {
+      "main": [
+        [
+          {
+            "node": "Edit a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit a text message": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Call 'Lead Outreach Engine'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "HgfbrTcV1vTYGfg6",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "6bb3705a-8d19-4e5a-9f92-7a57a3ee9278",
+  "meta": {
+    "instanceId": "75a203da2afa4f9088428b5121cafd52867cf04f552dbee25573576faa37906a"
+  },
+  "id": "AcRUnbLjUktXEe5t",
+  "tags": []
+}
