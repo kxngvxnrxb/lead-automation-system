@@ -1,6 +1,6 @@
 ## 🚀 AI-Powered Lead Automation System
 
-👉 Full case study: /docs/
+👉 Full case study: /docs/case-study.md
 
 ## Overview
 
@@ -57,6 +57,11 @@ Captures and logs system errors and sends alerts.
 * PostgreSQL
 * Telegram API
 * AI (OpenAI / Google Gemini)
+
+### Sample Payloads
+
+- [sample-lead.json](samples/sample-lead.json) → Example input for Lead Intake Service  
+- [sample-error.json](samples/sample-error.json) → Example error log captured by Error Handling workflow
 
 ## Notes
 
