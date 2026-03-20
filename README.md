@@ -63,6 +63,24 @@ Captures and logs system errors and sends alerts.
 - [sample-lead.json](samples/sample-lead.json) → Example input for Lead Intake Service  
 - [sample-error.json](samples/sample-error.json) → Example error log captured by Error Handling workflow
 
+## Setup Database
+
+1. Create a Supabase (Postgres) project.
+2. Ensure the `set_updated_at()` trigger function exists:
+
+```sql
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+```bash
+psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DATABASE -f db/schema.sql
+```
+
 ## Notes
 
 * Credentials and API keys are NOT included for security reasons.
